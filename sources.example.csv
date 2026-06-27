@@ -1,0 +1,3 @@
+source_id,channel_title,channel_url,telegram_username,language,source_type,topic_label,toxicity_expected,notes,active
+src_001,Example Channel,https://t.me/examplechannel,@examplechannel,uk,news,politics,medium,Example public Telegram channel,true
+src_002,Another Example,https://t.me/anotherexample,@anotherexample,uk,community,general,low,Another example source,true

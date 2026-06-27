@@ -1,0 +1,39 @@
+input:
+  sources_file: "sources.example.csv"
+
+database:
+  path: "data/telegram_research.sqlite"
+
+scraping:
+  posts_per_channel: 100
+  comments_per_post: 100
+  scrape_comments: true
+
+  # Date filters are optional.
+  # Use ISO format: "2024-01-01"
+  after_date: null
+  before_date: null
+
+  # Optional keyword search inside Telegram posts.
+  # Use null to scrape all posts.
+  keyword_filter: null
+
+  # If false, posts with empty text are skipped.
+  include_posts_without_text: false
+
+  # Delay between requests. Do not set this to zero unless you enjoy pain.
+  min_delay_seconds: 2
+  max_delay_seconds: 6
+
+  # If true, the scraper stops when Telegram returns FloodWait.
+  # If false, it waits and continues.
+  stop_on_flood_wait: false
+
+privacy:
+  hash_sender_ids: true
+  save_sender_ids: false
+  save_usernames: false
+  save_media: false
+
+export:
+  output_dir: "exports"

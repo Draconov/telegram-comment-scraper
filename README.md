@@ -128,6 +128,16 @@ git diff --cached
 
 The automated check is intentionally conservative, but it cannot prove that text data is anonymous. Manually review every staged file.
 
+## Never commit
+
+- `.env`
+- Telegram API credentials
+- Telegram `.session` or `.session-journal` files
+- `ANONYMIZATION_SALT`
+- personal phone numbers, email addresses, or absolute user-directory paths
+- `sources.csv` when it contains a private research plan
+- SQLite databases, CSV exports, logs, screenshots, or QR images
+
 ## Responsible use
 
 Collect only material that you are permitted to access and process. Follow applicable law, research-ethics requirements, platform rules, data-minimization principles, and your institution's approval process. Do not use this project to bypass access controls or collect private chats.

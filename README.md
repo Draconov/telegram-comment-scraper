@@ -10,7 +10,7 @@ The repository contains source code and safe examples only. Real credentials, Te
 - Usernames are not saved.
 - Sender IDs are pseudonymized with HMAC-SHA256 and a private local salt.
 - Collected data is written to ignored local directories.
-- The QR login is rendered directly in the terminal; no QR image is created.
+- The QR login is rendered directly in the terminal.
 
 Pseudonymization is not the same as full anonymization. Message text can itself contain names, usernames, phone numbers, links, or other identifying information. Do not publish raw exports without a separate review and redaction process.
 
@@ -26,8 +26,6 @@ Pseudonymization is not the same as full anonymization. Message text can itself 
 ├── requirements.txt
 ├── run_scraper.py
 ├── sources.example.csv
-├── scripts/
-│   └── privacy_check.py
 └── src/
     ├── db.py
     ├── export.py

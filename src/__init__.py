@@ -1,3 +1,1 @@
-"""
-Telegram Research Scraper package.
-"""
+"""Telegram research scraper package."""

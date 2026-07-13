@@ -1,5 +1,5 @@
-from src.settings import load_config
 from src.export import export_all_tables
+from src.settings import load_config
 
 
 def main() -> None:

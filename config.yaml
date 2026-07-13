@@ -1,7 +1,9 @@
 input:
-  sources_file: "sources.example.csv"
+  # Keep the real source list in sources.csv. It is ignored by Git.
+  sources_file: "sources.csv"
 
 database:
+  # Collected data stays local because data/ is ignored by Git.
   path: "data/telegram_research.sqlite"
 
 scraping:
@@ -9,31 +11,26 @@ scraping:
   comments_per_post: 100
   scrape_comments: true
 
-  # Date filters are optional.
-  # Use ISO format: "2024-01-01"
+  # Optional ISO dates, for example "2026-01-01".
   after_date: null
   before_date: null
 
-  # Optional keyword search inside Telegram posts.
-  # Use null to scrape all posts.
+  # Optional Telegram text search. Use null to collect all matching posts.
   keyword_filter: null
-
-  # If false, posts with empty text are skipped.
   include_posts_without_text: false
 
-  # Delay between requests. Do not set this to zero unless you enjoy pain.
+  # Random delay between requests.
   min_delay_seconds: 2
   max_delay_seconds: 6
 
-  # If true, the scraper stops when Telegram returns FloodWait.
-  # If false, it waits and continues.
+  # false waits for Telegram's requested delay and continues.
   stop_on_flood_wait: false
 
 privacy:
+  # HMAC pseudonyms are stable only when ANONYMIZATION_SALT stays unchanged.
   hash_sender_ids: true
   save_sender_ids: false
   save_usernames: false
-  save_media: false
 
 export:
   output_dir: "exports"

@@ -1,25 +1,24 @@
+from __future__ import annotations
+
 import json
-import os
 import sqlite3
-from typing import Any, Dict, Optional
+from pathlib import Path
+from typing import Any
 
 from src.utils import utc_now_iso
 
 
-def connect_database(path: str) -> sqlite3.Connection:
-    directory = os.path.dirname(path)
-
-    if directory:
-        os.makedirs(directory, exist_ok=True)
-
-    conn = sqlite3.connect(path)
-    conn.execute("PRAGMA journal_mode=WAL;")
-    conn.execute("PRAGMA foreign_keys=ON;")
-    return conn
+def connect_database(path: str | Path) -> sqlite3.Connection:
+    database_path = Path(path)
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(database_path)
+    connection.execute("PRAGMA journal_mode=WAL;")
+    connection.execute("PRAGMA foreign_keys=ON;")
+    return connection
 
 
-def init_database(conn: sqlite3.Connection) -> None:
-    conn.execute(
+def init_database(connection: sqlite3.Connection) -> None:
+    connection.executescript(
         """
         CREATE TABLE IF NOT EXISTS sources (
             source_id TEXT PRIMARY KEY,
@@ -33,12 +32,8 @@ def init_database(conn: sqlite3.Connection) -> None:
             notes TEXT,
             active TEXT,
             scraped_at TEXT
-        )
-        """
-    )
+        );
 
-    conn.execute(
-        """
         CREATE TABLE IF NOT EXISTS posts (
             post_uid TEXT PRIMARY KEY,
             source_id TEXT,
@@ -53,12 +48,8 @@ def init_database(conn: sqlite3.Connection) -> None:
             comments_count INTEGER,
             scraped_at TEXT,
             FOREIGN KEY(source_id) REFERENCES sources(source_id)
-        )
-        """
-    )
+        );
 
-    conn.execute(
-        """
         CREATE TABLE IF NOT EXISTS comments (
             comment_uid TEXT PRIMARY KEY,
             post_uid TEXT,
@@ -75,51 +66,27 @@ def init_database(conn: sqlite3.Connection) -> None:
             scraped_at TEXT,
             FOREIGN KEY(post_uid) REFERENCES posts(post_uid),
             FOREIGN KEY(source_id) REFERENCES sources(source_id)
-        )
-        """
-    )
+        );
 
-    conn.execute(
-        """
         CREATE INDEX IF NOT EXISTS idx_posts_source_id
-        ON posts(source_id)
-        """
-    )
-
-    conn.execute(
-        """
+            ON posts(source_id);
         CREATE INDEX IF NOT EXISTS idx_comments_post_uid
-        ON comments(post_uid)
-        """
-    )
-
-    conn.execute(
-        """
+            ON comments(post_uid);
         CREATE INDEX IF NOT EXISTS idx_comments_source_id
-        ON comments(source_id)
+            ON comments(source_id);
         """
     )
+    connection.commit()
 
-    conn.commit()
 
-
-def save_source(conn: sqlite3.Connection, source: Dict[str, str]) -> None:
-    conn.execute(
+def save_source(connection: sqlite3.Connection, source: dict[str, str]) -> None:
+    connection.execute(
         """
         INSERT OR REPLACE INTO sources (
-            source_id,
-            channel_title,
-            channel_url,
-            telegram_username,
-            language,
-            source_type,
-            topic_label,
-            toxicity_expected,
-            notes,
-            active,
-            scraped_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            source_id, channel_title, channel_url, telegram_username,
+            language, source_type, topic_label, toxicity_expected,
+            notes, active, scraped_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             source.get("source_id"),
@@ -135,58 +102,41 @@ def save_source(conn: sqlite3.Connection, source: Dict[str, str]) -> None:
             utc_now_iso(),
         ),
     )
+    connection.commit()
 
-    conn.commit()
 
-
-def _message_reactions_to_json(message: Any) -> Optional[str]:
+def _reactions_to_json(message: Any) -> str | None:
     reactions = getattr(message, "reactions", None)
-
     if not reactions:
         return None
-
     try:
         return json.dumps(reactions.to_dict(), ensure_ascii=False)
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
         return str(reactions)
 
 
-def _message_comments_count(message: Any) -> Optional[int]:
+def _comments_count(message: Any) -> int | None:
     replies = getattr(message, "replies", None)
-
-    if not replies:
-        return None
-
-    return getattr(replies, "replies", None)
+    return getattr(replies, "replies", None) if replies else None
 
 
 def save_post(
-    conn: sqlite3.Connection,
-    source: Dict[str, str],
+    connection: sqlite3.Connection,
+    source: dict[str, str],
     channel_username: str,
     post: Any,
 ) -> str:
-    clean_channel = channel_username.replace("@", "")
+    clean_channel = channel_username.removeprefix("@")
     post_uid = f"{clean_channel}:{post.id}"
     post_url = f"https://t.me/{clean_channel}/{post.id}"
 
-    conn.execute(
+    connection.execute(
         """
         INSERT OR REPLACE INTO posts (
-            post_uid,
-            source_id,
-            channel_username,
-            post_id,
-            post_url,
-            date,
-            text,
-            views,
-            forwards,
-            reactions_json,
-            comments_count,
+            post_uid, source_id, channel_username, post_id, post_url,
+            date, text, views, forwards, reactions_json, comments_count,
             scraped_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             post_uid,
@@ -198,52 +148,38 @@ def save_post(
             post.message,
             getattr(post, "views", None),
             getattr(post, "forwards", None),
-            _message_reactions_to_json(post),
-            _message_comments_count(post),
+            _reactions_to_json(post),
+            _comments_count(post),
             utc_now_iso(),
         ),
     )
-
-    conn.commit()
+    connection.commit()
     return post_uid
 
 
 def save_comment(
-    conn: sqlite3.Connection,
-    source: Dict[str, str],
+    connection: sqlite3.Connection,
+    source: dict[str, str],
     channel_username: str,
     post_uid: str,
     post_id: int,
     comment: Any,
-    sender_id: Optional[str],
-    sender_hash: Optional[str],
-    sender_username: Optional[str],
+    sender_id: str | None,
+    sender_hash: str | None,
+    sender_username: str | None,
 ) -> None:
-    clean_channel = channel_username.replace("@", "")
+    clean_channel = channel_username.removeprefix("@")
     comment_uid = f"{clean_channel}:{post_id}:{comment.id}"
+    media = getattr(comment, "media", None)
+    media_type = type(media).__name__ if media is not None else None
 
-    media_type = None
-    if getattr(comment, "media", None):
-        media_type = type(comment.media).__name__
-
-    conn.execute(
+    connection.execute(
         """
         INSERT OR REPLACE INTO comments (
-            comment_uid,
-            post_uid,
-            source_id,
-            channel_username,
-            post_id,
-            comment_id,
-            date,
-            sender_id,
-            sender_hash,
-            sender_username,
-            text,
-            media_type,
-            scraped_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            comment_uid, post_uid, source_id, channel_username,
+            post_id, comment_id, date, sender_id, sender_hash,
+            sender_username, text, media_type, scraped_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             comment_uid,
@@ -261,5 +197,4 @@ def save_comment(
             utc_now_iso(),
         ),
     )
-
-    conn.commit()
+    connection.commit()

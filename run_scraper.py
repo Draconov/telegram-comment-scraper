@@ -1,7 +1,7 @@
 import asyncio
 
-from src.settings import load_config
 from src.scraper import TelegramResearchScraper
+from src.settings import load_config
 
 
 async def main() -> None:

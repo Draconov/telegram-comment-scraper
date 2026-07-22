@@ -152,10 +152,13 @@ class TelegramResearchScraper:
                         post_uid=post_uid,
                     )
 
-                await polite_delay(
-                    self.config.scraping.min_delay_seconds,
-                    self.config.scraping.max_delay_seconds,
-                )
+                connection.commit()
+
+                if collected_posts % 10 == 0:
+                    await polite_delay(
+                        self.config.scraping.min_delay_seconds,
+                        self.config.scraping.max_delay_seconds,
+                    )
         except FloodWaitError as error:
             await self.handle_flood_wait(error)
         except Exception as error:

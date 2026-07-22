@@ -153,7 +153,6 @@ def save_post(
             utc_now_iso(),
         ),
     )
-    connection.commit()
     return post_uid
 
 
@@ -197,4 +196,3 @@ def save_comment(
             utc_now_iso(),
         ),
     )
-    connection.commit()

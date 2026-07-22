@@ -30,6 +30,8 @@ from src.utils import (
     pseudonymize,
 )
 
+from src.login_qr import ensure_authorized
+
 
 class TelegramResearchScraper:
     def __init__(self, config: AppConfig) -> None:
@@ -39,36 +41,48 @@ class TelegramResearchScraper:
 
     async def run(self) -> None:
         sources = load_sources(self.config.input.sources_file)
+
         if not sources:
             print("No active sources found. Check your local sources.csv file.")
             return
 
         session_path = Path(self.config.telegram.session_name)
+
         if session_path.parent != Path("."):
             session_path.parent.mkdir(parents=True, exist_ok=True)
 
-        connection = connect_database(self.config.database.path)
-        init_database(connection)
+        client = TelegramClient(
+            self.config.telegram.session_name,
+            self.config.telegram.api_id,
+            self.config.telegram.api_hash,
+        )
+
+        await client.connect()
 
         try:
-            async with TelegramClient(
-                self.config.telegram.session_name,
-                self.config.telegram.api_id,
-                self.config.telegram.api_hash,
-            ) as client:
-                if not await client.is_user_authorized():
-                    raise RuntimeError(
-                        "Telegram session is not authorized. Run: python login_qr.py"
+            await ensure_authorized(client)
+
+            connection = connect_database(self.config.database.path)
+            init_database(connection)
+
+            try:
+                for source in sources:
+                    await self.scrape_source(
+                        client,
+                        connection,
+                        source,
                     )
 
-                for source in sources:
-                    await self.scrape_source(client, connection, source)
                     await polite_delay(
                         self.config.scraping.min_delay_seconds,
                         self.config.scraping.max_delay_seconds,
                     )
+            finally:
+                connection.close()
+
         finally:
-            connection.close()
+            await client.disconnect()
+
 
     async def scrape_source(
         self,

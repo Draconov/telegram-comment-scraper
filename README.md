@@ -175,8 +175,8 @@ scraping:
   before_date: null
   keyword_filter: null
   include_posts_without_text: false
-  min_delay_seconds: 2
-  max_delay_seconds: 6
+  min_delay_seconds: 0.5
+  max_delay_seconds: 1.5
   stop_on_flood_wait: false
 
 privacy:

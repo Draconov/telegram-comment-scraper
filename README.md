@@ -118,16 +118,6 @@ python export_dataset.py
 
 CSV files are written to `exports/`, which is ignored by Git because exports can contain personal data from Telegram messages.
 
-## Before every GitHub push
-
-```powershell
-python scripts/privacy_check.py
-git status
-git diff --cached
-```
-
-The automated check is intentionally conservative, but it cannot prove that text data is anonymous. Manually review every staged file.
-
 ## Never commit
 
 - `.env`

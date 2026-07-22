@@ -20,8 +20,8 @@ scraping:
   include_posts_without_text: false
 
   # Random delay between requests.
-  min_delay_seconds: 2
-  max_delay_seconds: 6
+  min_delay_seconds: 0.5
+  max_delay_seconds: 1.5
 
   # false waits for Telegram's requested delay and continues.
   stop_on_flood_wait: false

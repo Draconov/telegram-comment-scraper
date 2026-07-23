@@ -273,11 +273,19 @@ The script creates:
 
 ```text
 exports/
-├── sources.csv
-├── posts.csv
-├── comments.csv
-└── comments_with_source_labels.csv
+├── 2026-07-23_18-42-15/
+│   ├── sources.csv
+│   ├── posts.csv
+│   ├── comments.csv
+│   └── comments_with_source_labels.csv
+└── 2026-07-24_10-08-31/
+    ├── sources.csv
+    ├── posts.csv
+    ├── comments.csv
+    └── comments_with_source_labels.csv
 ```
+
+The directory name records the **export time**. Individual database rows also contain a `scraped_at` value that records when each source, post, or comment was collected. Because the SQLite database is cumulative, every export is a snapshot of the database's current contents and may include records collected during earlier runs.
 
 `comments_with_source_labels.csv` joins each comment with selected post and source metadata, making it the most convenient starting point for annotation and NLP preprocessing.
 

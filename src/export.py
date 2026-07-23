@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 from typing import Iterable
 
@@ -20,6 +21,28 @@ def _write_rows_to_csv(
         writer.writeheader()
         writer.writerows(dict(row) for row in materialized)
     print(f"Exported: {output_path}")
+
+
+def _create_timestamped_export_directory(output_dir: str | Path) -> Path:
+    """Create a unique directory for one export snapshot.
+
+    Example: exports/2026-07-23_18-42-15/
+    A numeric suffix is added if two exports start during the same second.
+    """
+
+    base_directory = Path(output_dir)
+    base_directory.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now().astimezone().strftime("%Y-%m-%d_%H-%M-%S")
+    destination = base_directory / timestamp
+    duplicate_number = 2
+
+    while destination.exists():
+        destination = base_directory / f"{timestamp}_{duplicate_number:02d}"
+        duplicate_number += 1
+
+    destination.mkdir(parents=False, exist_ok=False)
+    return destination
 
 
 def export_table(
@@ -66,15 +89,14 @@ def export_comments_with_source_labels(
     _write_rows_to_csv(rows, output_dir / "comments_with_source_labels.csv")
 
 
-def export_all_tables(database_path: str, output_dir: str) -> None:
+def export_all_tables(database_path: str, output_dir: str) -> Path:
     database = Path(database_path)
     if not database.exists():
         raise FileNotFoundError(
             f"Database not found: {database}. Run the scraper first."
         )
 
-    destination = Path(output_dir)
-    destination.mkdir(parents=True, exist_ok=True)
+    destination = _create_timestamped_export_directory(output_dir)
 
     connection = sqlite3.connect(database)
     connection.row_factory = sqlite3.Row
@@ -84,3 +106,6 @@ def export_all_tables(database_path: str, output_dir: str) -> None:
         export_comments_with_source_labels(connection, destination)
     finally:
         connection.close()
+
+    print(f"Export snapshot completed: {destination}")
+    return destination

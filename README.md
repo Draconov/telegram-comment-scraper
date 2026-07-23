@@ -13,7 +13,9 @@ The scraper reads a local CSV list of channels, stores the collected material in
 - Skips unavailable channels and posts without linked discussion threads without stopping the full run.
 - Handles Telegram `FloodWaitError` responses.
 - Saves data to a local SQLite database.
-- Exports individual tables and a joined comments dataset to CSV.
+- Assigns every collection session a unique scrape-run ID.
+- Automatically exports only the records observed in the completed run.
+- Writes a manifest, source-level run summary, row counts, and SHA-256 checksums.
 - Pseudonymizes sender IDs with HMAC-SHA256 by default.
 - Does not save raw sender IDs or usernames by default.
 - Keeps credentials, sessions, source lists, databases, and exports outside Git.
@@ -31,11 +33,13 @@ Check Telegram session
     ↓
 Collect posts and comments
     ↓
+Create scrape run ID and record run membership
+    ↓
 data/telegram_research.sqlite
     ↓
-export_dataset.py
+Automatic run-specific export
     ↓
-exports/*.csv
+exports/<scrape_run_id>/*.csv + manifest.json
 ```
 
 ## Requirements
@@ -186,6 +190,7 @@ privacy:
 
 export:
   output_dir: "exports"
+  auto_export_after_scrape: true
 ```
 
 Important options:
@@ -205,6 +210,8 @@ Important options:
 | `hash_sender_ids` | Generates stable pseudonymous sender hashes |
 | `save_sender_ids` | Stores raw Telegram sender IDs; disabled by default |
 | `save_usernames` | Stores Telegram usernames; disabled by default |
+| `output_dir` | Parent directory for run-specific export folders |
+| `auto_export_after_scrape` | Automatically exports the completed run when `true` |
 
 ## Run the scraper
 
@@ -224,6 +231,7 @@ When no authorized Telegram session exists, the program automatically:
 4. Requests the Telegram two-step verification password when the account uses it.
 5. Saves the authorized session locally under `sessions/`.
 6. Starts scraping immediately.
+7. Creates a run-specific export automatically after the scrape completes.
 
 The QR code refreshes automatically when it expires.
 
@@ -245,7 +253,7 @@ Authentication is built into `run_scraper.py`, so this is normally unnecessary. 
 python -m src.login_qr
 ```
 
-## Database
+## Database and scrape runs
 
 Collected data is stored by default in:
 
@@ -253,43 +261,103 @@ Collected data is stored by default in:
 data/telegram_research.sqlite
 ```
 
-The database contains three tables:
+The database keeps canonical content and run history separately:
 
-- `sources` — source metadata from `sources.csv`;
-- `posts` — Telegram post text and metadata;
-- `comments` — comment text, metadata, and privacy-controlled sender fields.
+- `sources` — current source metadata from `sources.csv`;
+- `posts` — deduplicated Telegram post text and metadata;
+- `comments` — deduplicated comment text, metadata, and privacy-controlled sender fields;
+- `scrape_runs` — one record for each execution of the scraper;
+- `run_sources` — source-level status and counts for each run;
+- `run_posts` — links posts to the runs in which they were observed;
+- `run_comments` — links comments to the runs in which they were observed.
 
-Existing rows use stable identifiers and are replaced when the same post or comment is collected again. This makes repeated test runs less likely to create duplicate records.
+Posts and comments keep stable identifiers, so scraping the same material again updates the canonical row instead of creating duplicates. The mapping tables preserve the fact that the item was observed in more than one run.
+
+A run ID looks like:
+
+```text
+20260723T181207Z_bd1f5420
+```
+
+It combines a UTC timestamp with a short random suffix. The random suffix prevents collisions when two runs begin during the same second.
 
 ## Export the dataset
 
-After scraping, run:
+With the default setting:
+
+```yaml
+export:
+  output_dir: "exports"
+  auto_export_after_scrape: true
+```
+
+the scraper automatically exports the completed run after collection finishes. The export contains only sources, posts, and comments observed in that run—not every record accumulated in the database.
+
+```text
+exports/
+├── 20260723T181207Z_bd1f5420/
+│   ├── sources.csv
+│   ├── posts.csv
+│   ├── comments.csv
+│   ├── comments_with_source_labels.csv
+│   ├── run_summary.csv
+│   └── manifest.json
+├── 20260724T091522Z_2fa813c0/
+│   └── ...
+└── latest_run.txt
+```
+
+The main dataset CSV files include `scrape_run_id`. `run_summary.csv` uses `run_id` and reports the status and collected row counts for every source. `manifest.json` records:
+
+- run start and completion times;
+- non-secret scraping and privacy settings;
+- export time and export mode;
+- exported filenames and row counts;
+- a SHA-256 checksum for every CSV file.
+
+The manifest makes it easier to prove which configuration produced a dataset and to detect accidental file changes later. No Telegram API credentials, session data, or anonymization salt are written to it.
+
+`comments_with_source_labels.csv` joins each comment with selected post and source metadata, making it the most convenient starting point for annotation and NLP preprocessing.
+
+### Manual export commands
+
+The latest completed run is exported by default. Manual export reads only the database and export paths from `config.yaml`; it does not need to connect to Telegram.
 
 ```powershell
 python export_dataset.py
 ```
 
-The script creates:
+List all recorded runs:
 
-```text
-exports/
-├── 2026-07-23_18-42-15/
-│   ├── sources.csv
-│   ├── posts.csv
-│   ├── comments.csv
-│   └── comments_with_source_labels.csv
-└── 2026-07-24_10-08-31/
-    ├── sources.csv
-    ├── posts.csv
-    ├── comments.csv
-    └── comments_with_source_labels.csv
+```powershell
+python export_dataset.py --list-runs
 ```
 
-The directory name records the **export time**. Individual database rows also contain a `scraped_at` value that records when each source, post, or comment was collected. Because the SQLite database is cumulative, every export is a snapshot of the database's current contents and may include records collected during earlier runs.
+Export one specific run:
 
-`comments_with_source_labels.csv` joins each comment with selected post and source metadata, making it the most convenient starting point for annotation and NLP preprocessing.
+```powershell
+python export_dataset.py --run-id 20260723T181207Z_bd1f5420
+```
+
+Create a cumulative snapshot of the full database:
+
+```powershell
+python export_dataset.py --all
+```
+
+Cumulative snapshots are saved in folders such as:
+
+```text
+exports/all_data_2026-07-23_21-30-00/
+```
+
+No result folder is overwritten. Re-exporting the same run creates a suffix such as `_02`. Exports are first written to a temporary directory and renamed only after every file succeeds, which prevents a failed export from looking complete.
 
 CSV files are written with UTF-8 BOM encoding so Ukrainian text opens more reliably in spreadsheet software.
+
+### Existing databases
+
+The schema upgrade is automatic. Data collected before run tracking was added remains in `sources`, `posts`, and `comments`, but it has no historical run membership. Use `python export_dataset.py --all` to export that legacy data, or scrape the sources again to associate matching records with a new run ID.
 
 ## Privacy model
 
@@ -319,14 +387,6 @@ sources.csv
 data/
 exports/
 logs/
-```
-
-Before pushing changes, inspect what Git will upload:
-
-```powershell
-git status
-git diff --cached
-git ls-files
 ```
 
 ## Common problems

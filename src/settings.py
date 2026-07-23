@@ -51,6 +51,7 @@ class PrivacyConfig:
 @dataclass(frozen=True)
 class ExportConfig:
     output_dir: str
+    auto_export_after_scrape: bool
 
 
 @dataclass(frozen=True)
@@ -156,5 +157,36 @@ def load_config(path: str | Path) -> AppConfig:
         ),
         export=ExportConfig(
             output_dir=str(export_raw.get("output_dir", "exports")),
+            auto_export_after_scrape=bool(
+                export_raw.get("auto_export_after_scrape", True)
+            ),
         ),
+    )
+
+
+@dataclass(frozen=True)
+class DatasetExportConfig:
+    database_path: str
+    output_dir: str
+
+
+def load_dataset_export_config(path: str | Path) -> DatasetExportConfig:
+    """Load only non-secret paths required for dataset export."""
+
+    config_path = Path(path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"Configuration file not found: {config_path}")
+
+    with config_path.open("r", encoding="utf-8") as handle:
+        raw = yaml.safe_load(handle) or {}
+
+    raw = _mapping(raw, "root")
+    database_raw = _mapping(raw.get("database", {}), "database")
+    export_raw = _mapping(raw.get("export", {}), "export")
+
+    return DatasetExportConfig(
+        database_path=str(
+            database_raw.get("path", "data/telegram_research.sqlite")
+        ),
+        output_dir=str(export_raw.get("output_dir", "exports")),
     )

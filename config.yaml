@@ -7,8 +7,8 @@ database:
   path: "data/telegram_research.sqlite"
 
 scraping:
-  posts_per_channel: 100
-  comments_per_post: 100
+  posts_per_channel: 3
+  comments_per_post: 5
   scrape_comments: true
 
   # Optional ISO dates, for example "2026-01-01".

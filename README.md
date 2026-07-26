@@ -53,22 +53,40 @@ exports/<scrape_run_id>/*.csv + manifest.json
 
 ```text
 .
-├── .env.example              # Template for private local credentials
-├── .gitignore                # Excludes secrets and collected data
-├── config.yaml               # Scraping, privacy, and export settings
-├── export_dataset.py         # Exports SQLite tables to CSV
-├── requirements.txt          # Python dependencies
-├── run_scraper.py            # Main scraper entry point
-├── sources.example.csv       # Safe example source list
+├── .env.example                    # Template for private local credentials
+├── .gitignore                      # Excludes secrets and collected data
+├── config.yaml                     # Scraping, privacy, and export settings
+├── export_dataset.py               # Run-specific and cumulative CSV export
+├── requirements.txt                # Python dependencies
+├── run_scraper.py                  # Main scraper entry point
+├── sources.example.csv             # Safe example source list
+├── analysis/
+│   ├── __init__.py
+│   └── lexicon_validation/
+│       ├── README.md                # Full analysis and validation workflow
+│       ├── ANNOTATION_GUIDELINES.md # Manual annotation codebook
+│       ├── analyze_scraping_results.py
+│       ├── prepare_validation_sample.py
+│       ├── create_second_annotator_subset.py
+│       ├── calculate_validation_metrics.py
+│       ├── lexicon_common.py
+│       └── tests/
+│           └── test_toolkit.py
+├── lexicons/
+│   ├── README.md
+│   ├── offensive_lexicon.csv       # Dictionary with metadata
+│   └── offensive_lexicon.txt       # One term per line
+├── tests/
+│   └── test_scrape_run_export.py   # Database/export integration test
 └── src/
     ├── __init__.py
-    ├── db.py                 # SQLite schema and write operations
-    ├── export.py             # CSV export logic
-    ├── login_qr.py           # Automatic terminal QR authentication
-    ├── scraper.py            # Telegram collection workflow
-    ├── settings.py           # Environment and YAML configuration
-    ├── sources.py            # Source CSV loading and validation
-    └── utils.py              # Dates, delays, normalization, pseudonyms
+    ├── db.py                       # SQLite schema and write operations
+    ├── export.py                   # CSV export logic
+    ├── login_qr.py                 # Automatic terminal QR authentication
+    ├── scraper.py                  # Telegram collection workflow
+    ├── settings.py                 # Environment and YAML configuration
+    ├── sources.py                  # Source CSV loading and validation
+    └── utils.py                    # Dates, delays, normalization, pseudonyms
 ```
 
 ## Installation
@@ -359,104 +377,51 @@ CSV files are written with UTF-8 BOM encoding so Ukrainian text opens more relia
 
 The schema upgrade is automatic. Data collected before run tracking was added remains in `sources`, `posts`, and `comments`, but it has no historical run membership. Use `python export_dataset.py --all` to export that legacy data, or scrape the sources again to associate matching records with a new run ID.
 
-# Standalone Lexicon Analyzer
+## Lexicon analysis and validation
 
-This is a separate post-processing tool for CSV files exported by the Telegram scraper. It does not log in to Telegram, modify the scraper, read `.env`, or access the SQLite database.
+The repository includes a separate post-processing toolkit in
+`analysis/lexicon_validation/`. It does not log in to Telegram and does not
+modify the scraper database. It works with an exported scrape-run folder.
 
-## What it calculates
-
-- total number of analyzed messages;
-- number and percentage of messages containing at least one dictionary entry;
-- total number of dictionary occurrences;
-- occurrence count and message count for every dictionary entry, including zero-frequency entries;
-- statistics by source/channel;
-- statistics for each word within each source;
-- a reviewable CSV containing every matched message and its detected entries.
-
-## Basic use
-
-From PowerShell:
+Use the metadata-rich CSV dictionary so category and aspect statistics are
+preserved:
 
 ```powershell
-python analyze_scraping_results.py `
-  --input "C:\path\to\exports\RUN_ID" `
-  --dictionary "C:\path\to\offensive_lexicon.txt"
-```
-
-For an export folder, the analyzer automatically uses:
-
-1. `comments_with_source_labels.csv`, when available;
-2. otherwise `comments.csv`.
-
-Comments are analyzed by default. Add posts with:
-
-```powershell
-python analyze_scraping_results.py `
-  --input "C:\path\to\exports\RUN_ID" `
-  --dictionary "C:\path\to\offensive_lexicon.txt" `
+python -m analysis.lexicon_validation.analyze_scraping_results `
+  --input "exports\YOUR_RUN_ID" `
+  --dictionary "lexicons\offensive_lexicon.csv" `
   --include-posts
 ```
 
-A single CSV can also be analyzed:
+The corrected analyzer safely reads multiline CSV fields, normalizes post and
+comment source identifiers, counts dictionary occurrences, and produces
+category- and aspect-level summaries.
+
+Create a small blinded pilot sample before the full manual validation:
 
 ```powershell
-python analyze_scraping_results.py `
-  --input "C:\path\to\comments_with_source_labels.csv" `
-  --dictionary "C:\path\to\offensive_lexicon.txt"
+python -m analysis.lexicon_validation.prepare_validation_sample `
+  --input "exports\YOUR_RUN_ID" `
+  --dictionary "lexicons\offensive_lexicon.csv" `
+  --include-posts `
+  --matched-size 50 `
+  --unmatched-size 50 `
+  --seed 20260726
 ```
 
-## Dictionary formats
-
-Supported formats: TXT, CSV, TSV, and JSON.
-
-TXT format uses one entry per line. Empty lines and lines beginning with `#` are ignored.
-
-For CSV/TSV, the analyzer searches for a column named `term`, `word`, `lexeme`, `lemma`, `слово`, `лексема`, or `лема`. A custom column can be selected with:
+Run both test suites from the repository root:
 
 ```powershell
---dictionary-column column_name
+python -m unittest discover -s tests -v
+python -m unittest discover `
+  -s analysis\lexicon_validation\tests `
+  -v
 ```
 
-## Output
-
-By default, a timestamped directory is created inside the selected export directory:
-
-```text
-lexicon_analysis_2026-07-24_18-30-45/
-├── analysis_summary.json - how many messages there are, how many dictionary words they contain, the percentage of such messages and the total number of uses;
-├── word_frequencies.csv — the number of uses of each word and the number of messages where it appeared;
-├── messages_with_matches.csv — messages with triggers for manual checking;
-├── source_summary.csv — statistics for each channel;
-├── word_frequencies_by_source.csv — frequencies of each word separately by channel;
-└── dictionary_snapshot.txt
-```
-
-`word_frequencies.csv` is the main answer to the frequency-counting task. It contains both `total_occurrences` and `messages_with_term`.
-
-`messages_with_matches.csv` is intended for manual validation and false-positive review.
-
-## Matching behavior
-
-The default mode is literal whole-term matching:
-
-- case-insensitive;
-- Unicode NFKC normalization;
-- normalization of Ukrainian apostrophe variants and dash variants;
-- multi-word expressions are supported;
-- entries are not matched inside longer words;
-- no stemming or lemmatization is performed.
-
-Substring matching can be enabled with:
-
-```powershell
---match-mode substring
-```
-
-Case-sensitive matching can be enabled with:
-
-```powershell
---case-sensitive
-```
+See
+[analysis/lexicon_validation/README.md](analysis/lexicon_validation/README.md)
+for the complete workflow, annotation procedure, second-annotator subset, and
+metric calculation commands.
 
 ## Privacy model
 

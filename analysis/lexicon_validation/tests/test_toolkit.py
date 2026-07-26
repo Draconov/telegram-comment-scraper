@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def write_csv(path: Path, fieldnames: list[str], rows: list[dict[str, str]]) -> None:
@@ -106,7 +106,8 @@ class ToolkitEndToEndTest(unittest.TestCase):
             subprocess.run(
                 [
                     sys.executable,
-                    str(ROOT / "analyze_scraping_results.py"),
+                    "-m",
+                    "analysis.lexicon_validation.analyze_scraping_results",
                     "--input",
                     str(export),
                     "--dictionary",
@@ -116,7 +117,7 @@ class ToolkitEndToEndTest(unittest.TestCase):
                     str(analysis),
                 ],
                 check=True,
-                cwd=ROOT,
+                cwd=REPO_ROOT,
                 capture_output=True,
                 text=True,
             )
@@ -145,7 +146,8 @@ class ToolkitEndToEndTest(unittest.TestCase):
             subprocess.run(
                 [
                     sys.executable,
-                    str(ROOT / "prepare_validation_sample.py"),
+                    "-m",
+                    "analysis.lexicon_validation.prepare_validation_sample",
                     "--input",
                     str(export),
                     "--dictionary",
@@ -161,7 +163,7 @@ class ToolkitEndToEndTest(unittest.TestCase):
                     str(sample),
                 ],
                 check=True,
-                cwd=ROOT,
+                cwd=REPO_ROOT,
                 capture_output=True,
                 text=True,
             )
@@ -172,6 +174,74 @@ class ToolkitEndToEndTest(unittest.TestCase):
             self.assertEqual(len(blinded), 3)
             threat_sample = next(row for row in blinded if "здохни" in row["text"])
             self.assertEqual(threat_sample["parent_post_text"], "Parent post")
+
+            # Complete a small first-annotator file with one true positive,
+            # one false positive, and one true negative.
+            for row in blinded:
+                if "здохни" in row["text"]:
+                    row["context_label"] = "offensive"
+                else:
+                    row["context_label"] = "non_offensive"
+                row["annotator_id"] = "annotator_a"
+            annotations = base / "annotations.csv"
+            write_csv(annotations, list(blinded[0]), blinded)
+
+            second = base / "second.csv"
+            subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "analysis.lexicon_validation.create_second_annotator_subset",
+                    "--input",
+                    str(annotations),
+                    "--count",
+                    "2",
+                    "--seed",
+                    "7",
+                    "--output",
+                    str(second),
+                ],
+                check=True,
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+            )
+            second_fields, second_rows = None, None
+            with second.open(encoding="utf-8-sig", newline="") as handle:
+                reader = csv.DictReader(handle)
+                second_fields = reader.fieldnames
+                second_rows = list(reader)
+            self.assertEqual(len(second_rows), 2)
+            # Keep the same labels; agreement should be perfect on overlap.
+            write_csv(second, second_fields, second_rows)
+
+            metrics = base / "metrics"
+            subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "analysis.lexicon_validation.calculate_validation_metrics",
+                    "--annotations",
+                    str(annotations),
+                    "--second-annotations",
+                    str(second),
+                    "--key",
+                    str(sample / "validation_sample_key.csv"),
+                    "--output",
+                    str(metrics),
+                ],
+                check=True,
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+            )
+            report = json.loads((metrics / "validation_metrics.json").read_text("utf-8"))
+            self.assertEqual(report["unweighted_metrics"]["true_positive"], 1)
+            self.assertEqual(report["unweighted_metrics"]["false_positive"], 1)
+            self.assertEqual(report["unweighted_metrics"]["true_negative"], 1)
+            self.assertEqual(
+                report["inter_annotator_agreement"]["observed_agreement"], 1.0
+            )
 
 
 if __name__ == "__main__":

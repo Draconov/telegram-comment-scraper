@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from lexicon_common import (
+from analysis.lexicon_validation.lexicon_common import (
     CsvQuality,
     LexiconEntry,
     compile_matcher,

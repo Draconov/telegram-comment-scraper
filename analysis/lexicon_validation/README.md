@@ -25,18 +25,18 @@ Your previous analysis should therefore remain archived as a baseline, but final
 - `calculate_validation_metrics.py` — weighted detector metrics and agreement.
 - `ANNOTATION_GUIDELINES.md` — annotation codebook.
 
-## Step 1 — copy the toolkit
+## Step 1 — run from the repository root
 
-Place this folder anywhere. Keep it outside the raw data folder if preferred. Do not commit raw exports or annotation files containing Telegram text to a public repository.
+This toolkit is integrated into the repository as a Python package. Run every command from the repository root. Do not commit raw exports or annotation files containing Telegram text to a public repository.
 
 ## Step 2 — rerun corrected analysis
 
 Use the metadata dictionary CSV, not only the TXT list:
 
 ```powershell
-python analyze_scraping_results.py `
+python -m analysis.lexicon_validation.analyze_scraping_results `
   --input "C:\path\to\exports\YOUR_RUN_ID" `
-  --dictionary "C:\path\to\offensive_lexicon.csv" `
+  --dictionary "lexicons\offensive_lexicon.csv" `
   --include-posts
 ```
 
@@ -68,9 +68,9 @@ A non-empty warning does not always mean corrupted data, but it must be investig
 Start with a pilot before spending days on the full sample:
 
 ```powershell
-python prepare_validation_sample.py `
+python -m analysis.lexicon_validation.prepare_validation_sample `
   --input "C:\path\to\exports\YOUR_RUN_ID" `
-  --dictionary "C:\path\to\offensive_lexicon.csv" `
+  --dictionary "lexicons\offensive_lexicon.csv" `
   --include-posts `
   --matched-size 50 `
   --unmatched-size 50 `
@@ -82,9 +82,9 @@ Annotate only `validation_sample_blinded.csv`. Do not open the key during annota
 After the pilot, revise `ANNOTATION_GUIDELINES.md` only when a rule was genuinely ambiguous. Then generate the main sample with a different seed or delete the pilot folder and use:
 
 ```powershell
-python prepare_validation_sample.py `
+python -m analysis.lexicon_validation.prepare_validation_sample `
   --input "C:\path\to\exports\YOUR_RUN_ID" `
-  --dictionary "C:\path\to\offensive_lexicon.csv" `
+  --dictionary "lexicons\offensive_lexicon.csv" `
   --include-posts `
   --matched-size 400 `
   --unmatched-size 600 `
@@ -115,7 +115,7 @@ Use the exact values from `ANNOTATION_GUIDELINES.md`.
 For inter-annotator agreement, create a reproducible 20% overlap subset:
 
 ```powershell
-python create_second_annotator_subset.py `
+python -m analysis.lexicon_validation.create_second_annotator_subset `
   --input "validation_sample_blinded.csv" `
   --percent 20 `
   --seed 20260728
@@ -126,7 +126,7 @@ Give the resulting `validation_sample_second_annotator.csv` to the second annota
 ## Step 5 — calculate validation metrics
 
 ```powershell
-python calculate_validation_metrics.py `
+python -m analysis.lexicon_validation.calculate_validation_metrics `
   --annotations "C:\path\to\validation_sample_blinded_ANNOTATED.csv" `
   --key "C:\path\to\validation_sample_key.csv"
 ```
@@ -134,7 +134,7 @@ python calculate_validation_metrics.py `
 With a second annotator:
 
 ```powershell
-python calculate_validation_metrics.py `
+python -m analysis.lexicon_validation.calculate_validation_metrics `
   --annotations "annotator_a.csv" `
   --second-annotations "annotator_b.csv" `
   --key "validation_sample_key.csv"
@@ -169,6 +169,18 @@ offensive_lexicon_v2.csv
 ```
 
 Never overwrite the dictionary snapshot used for a reported experiment.
+
+## Test the toolkit
+
+From the repository root:
+
+```powershell
+python -m unittest discover `
+  -s analysis\lexicon_validation\tests `
+  -v
+```
+
+The test covers multiline comments, source normalization, longest-match behavior, and validation-sample creation.
 
 ## Step 7 — final thesis reporting
 

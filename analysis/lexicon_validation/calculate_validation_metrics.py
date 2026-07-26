@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from lexicon_common import read_csv_rows, write_csv
+from analysis.lexicon_validation.lexicon_common import read_csv_rows, write_csv
 
 VERSION = "1.0.0"
 VALID_CONTEXT_LABELS = {"offensive", "non_offensive", "uncertain"}

@@ -7,7 +7,7 @@ import random
 import sys
 from pathlib import Path
 
-from lexicon_common import read_csv_rows, write_csv
+from analysis.lexicon_validation.lexicon_common import read_csv_rows, write_csv
 
 VERSION = "1.0.0"
 

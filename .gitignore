@@ -11,8 +11,6 @@ secrets*
 sessions/
 *.session
 *.session-journal
-telegram_login_qr.png
-qr_login*.png
 
 # Private research inputs and collected datasets
 sources.csv
@@ -23,6 +21,9 @@ exports/
 output/
 results/
 logs/
+validation_runs/
+analysis_results/
+research_runs/
 *.sqlite
 *.sqlite3
 *.db
@@ -30,6 +31,14 @@ logs/
 *.db-wal
 *.db-shm
 *.csv.tmp
+
+# Annotation files containing real messages
+validation_sample_*.csv
+annotator_*.csv
+false_positives.csv
+false_negatives.csv
+evaluated_sample_with_key.csv
+messages_with_matches.csv
 
 # Python
 .venv/

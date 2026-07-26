@@ -359,6 +359,105 @@ CSV files are written with UTF-8 BOM encoding so Ukrainian text opens more relia
 
 The schema upgrade is automatic. Data collected before run tracking was added remains in `sources`, `posts`, and `comments`, but it has no historical run membership. Use `python export_dataset.py --all` to export that legacy data, or scrape the sources again to associate matching records with a new run ID.
 
+# Standalone Lexicon Analyzer
+
+This is a separate post-processing tool for CSV files exported by the Telegram scraper. It does not log in to Telegram, modify the scraper, read `.env`, or access the SQLite database.
+
+## What it calculates
+
+- total number of analyzed messages;
+- number and percentage of messages containing at least one dictionary entry;
+- total number of dictionary occurrences;
+- occurrence count and message count for every dictionary entry, including zero-frequency entries;
+- statistics by source/channel;
+- statistics for each word within each source;
+- a reviewable CSV containing every matched message and its detected entries.
+
+## Basic use
+
+From PowerShell:
+
+```powershell
+python analyze_scraping_results.py `
+  --input "C:\path\to\exports\RUN_ID" `
+  --dictionary "C:\path\to\offensive_lexicon.txt"
+```
+
+For an export folder, the analyzer automatically uses:
+
+1. `comments_with_source_labels.csv`, when available;
+2. otherwise `comments.csv`.
+
+Comments are analyzed by default. Add posts with:
+
+```powershell
+python analyze_scraping_results.py `
+  --input "C:\path\to\exports\RUN_ID" `
+  --dictionary "C:\path\to\offensive_lexicon.txt" `
+  --include-posts
+```
+
+A single CSV can also be analyzed:
+
+```powershell
+python analyze_scraping_results.py `
+  --input "C:\path\to\comments_with_source_labels.csv" `
+  --dictionary "C:\path\to\offensive_lexicon.txt"
+```
+
+## Dictionary formats
+
+Supported formats: TXT, CSV, TSV, and JSON.
+
+TXT format uses one entry per line. Empty lines and lines beginning with `#` are ignored.
+
+For CSV/TSV, the analyzer searches for a column named `term`, `word`, `lexeme`, `lemma`, `слово`, `лексема`, or `лема`. A custom column can be selected with:
+
+```powershell
+--dictionary-column column_name
+```
+
+## Output
+
+By default, a timestamped directory is created inside the selected export directory:
+
+```text
+lexicon_analysis_2026-07-24_18-30-45/
+├── analysis_summary.json - how many messages there are, how many dictionary words they contain, the percentage of such messages and the total number of uses;
+├── word_frequencies.csv — the number of uses of each word and the number of messages where it appeared;
+├── messages_with_matches.csv — messages with triggers for manual checking;
+├── source_summary.csv — statistics for each channel;
+├── word_frequencies_by_source.csv — frequencies of each word separately by channel;
+└── dictionary_snapshot.txt
+```
+
+`word_frequencies.csv` is the main answer to the frequency-counting task. It contains both `total_occurrences` and `messages_with_term`.
+
+`messages_with_matches.csv` is intended for manual validation and false-positive review.
+
+## Matching behavior
+
+The default mode is literal whole-term matching:
+
+- case-insensitive;
+- Unicode NFKC normalization;
+- normalization of Ukrainian apostrophe variants and dash variants;
+- multi-word expressions are supported;
+- entries are not matched inside longer words;
+- no stemming or lemmatization is performed.
+
+Substring matching can be enabled with:
+
+```powershell
+--match-mode substring
+```
+
+Case-sensitive matching can be enabled with:
+
+```powershell
+--case-sensitive
+```
+
 ## Privacy model
 
 The safe defaults are:
